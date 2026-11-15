@@ -17,6 +17,7 @@ target_link_libraries(pico2_firmware
         pico_cyw43_arch_none
         hardware_uart
         hardware_i2c
+        hardware_spi
 )
 
 pico_enable_stdio_usb(pico2_firmware 1)

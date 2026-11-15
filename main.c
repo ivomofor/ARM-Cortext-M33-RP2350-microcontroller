@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
@@ -8,6 +9,7 @@
 
 #include "hardware/uart.h"
 #include "hardware/i2c.h"
+#include "hardware/spi.h"
 
 volatile bool alarm_fired = false;
 volatile bool repeating_timer_fired = false;
@@ -215,6 +217,10 @@ int main(void)
 
     uart_init(uart0, 9600);
     i2c_init(i2c0, 100000);
+    uint baudrate = spi_init(spi0, 1000000);
+
+    printf("SPI0 initialised. Requested baud rate: 1000000 Hz\n");
+    printf("SPI0 actual baud rate: %u Hz\n", baudrate);
 
     gpio_set_function(0, GPIO_FUNC_UART);
     gpio_set_function(1, GPIO_FUNC_UART);
@@ -224,6 +230,37 @@ int main(void)
 
     gpio_pull_up(4);
     gpio_pull_up(5);
+
+    gpio_set_function(16, GPIO_FUNC_SPI);
+    gpio_set_function(18, GPIO_FUNC_SPI);
+    gpio_set_function(19, GPIO_FUNC_SPI);
+
+    gpio_init(17);
+    gpio_set_dir(17, GPIO_OUT);
+    gpio_put(17, 1);
+
+    spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
+    uint8_t spi_tx_data = 0xA5;
+    uint8_t spi_rx_data = 0x00;
+
+    gpio_put(17, 0);
+
+    spi_write_read_blocking(spi0, &spi_tx_data, &spi_rx_data, 1);
+
+    gpio_put(17, 1);
+
+    printf("SPI transmitted: 0x%02X\n", spi_tx_data);
+    printf("SPI received:    0x%02X\n", spi_rx_data);
+
+    if (spi_tx_data == spi_rx_data)
+    {
+        printf("SPI loopback test PASSED!\n");
+    }
+    else
+    {
+        printf("SPI loopback test FAILED!\n");
+    }
 
     uart_set_format(uart0, 8, 1, UART_PARITY_NONE);
 
