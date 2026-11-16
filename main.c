@@ -125,6 +125,62 @@ static const uint8_t simulated_sensor_registers[] =
     0x56   // Register 0x07: Measurement byte 3
 };
 
+static uint8_t simulated_spi_registers[] =
+{
+    0x42,  // Register 0x00: Device ID
+    0x00,  // Register 0x01: Configuration
+    0x01,  // Register 0x02: Temperature MSB
+    0xF4,  // Register 0x03: Temperature LSB
+    0x01   // Register 0x04: Status
+};
+
+static uint8_t simulated_spi_read_register(uint8_t address)
+{
+    if (address >= sizeof(simulated_spi_registers))
+    {
+        printf("SPI: Invalid register address 0x%02X\n", address);
+        return 0xFF;
+    }
+
+    return simulated_spi_registers[address];
+}
+
+static uint8_t simulated_spi_process_read(uint8_t command)
+{
+    // Check whether this is a read command.
+    if ((command & 0x80) == 0)
+    {
+        printf("SPI: Invalid read command\n");
+        return 0xFF;
+    }
+
+    // Extract the register address.
+    uint8_t address = command & 0x7F;
+
+    // Retrieve the register value.
+    return simulated_spi_read_register(address);
+}
+
+static void simulated_spi_write_register(uint8_t address, uint8_t value)
+{
+    if (address >= sizeof(simulated_spi_registers))
+    {
+        printf("SPI: Invalid register address 0x%02X\n", address);
+        return;
+    }
+
+    if (address == 0x00)
+    {
+        printf("SPI: Register 0x00 is read-only\n");
+        return;
+    }
+
+    simulated_spi_registers[address] = value;
+
+    printf("SPI: Register 0x%02X updated to 0x%02X\n",
+           address, value);
+}
+
 uint8_t simulated_sensor_read_register(uint8_t register_address)
 {
     if (register_address >= sizeof(simulated_sensor_registers))
@@ -365,6 +421,58 @@ int main(void)
 
     uint64_t timer_start_time = time_us_64();
     bool timer_cancelled = false;
+
+    printf("\n--- Simulated SPI Register Test ---\n");
+
+    // Read the device ID register.
+    uint8_t spi_device_id = simulated_spi_read_register(0x00);
+
+    printf("SPI Device ID: 0x%02X\n", spi_device_id);
+
+    // Update the configuration register.
+    simulated_spi_write_register(0x01, 0x05);
+
+    // Read the configuration register again.
+    uint8_t configuration = simulated_spi_read_register(0x01);
+
+    printf("Configuration: 0x%02X\n", configuration);
+
+    // Test reading an invalid register.
+    uint8_t invalid_value = simulated_spi_read_register(0x05);
+
+    printf("Invalid register read returned: 0x%02X\n", invalid_value);
+
+    // Test writing to an invalid register.
+    simulated_spi_write_register(0x05, 0xAA);
+
+    // Test writing to the read-only Device ID register.
+    simulated_spi_write_register(0x00, 0x99);
+
+    // Read the Device ID again to verify it hasn't changed.
+    spi_device_id = simulated_spi_read_register(0x00);
+
+    printf("Device ID after write attempt: 0x%02X\n", spi_device_id);
+    printf("\n");
+
+    printf("\n--- SPI Read Command Test ---\n");
+
+    // Create a read command for register 0x00.
+    uint8_t read_command = 0x80;
+
+    // Process the read command.
+    uint8_t command_result = simulated_spi_process_read(read_command);
+
+    printf("Read command: 0x%02X\n", read_command);
+    printf("Read result:  0x%02X\n", command_result);
+
+    // Test an invalid command.
+    uint8_t invalid_command = 0x01;
+
+    command_result = simulated_spi_process_read(invalid_command);
+
+    printf("Invalid command result: 0x%02X\n", command_result);
+
+    printf("\n");
 
     while (true)
     {
