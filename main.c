@@ -181,6 +181,22 @@ static void simulated_spi_write_register(uint8_t address, uint8_t value)
            address, value);
 }
 
+static void simulated_spi_process_write(uint8_t command, uint8_t data)
+{
+    // Check whether this is a write command.
+    if ((command & 0x80) != 0)
+    {
+        printf("SPI: Invalid write command\n");
+        return;
+    }
+
+    // Extract the register address.
+    uint8_t address = command & 0x7F;
+
+    // Write the data into the register.
+    simulated_spi_write_register(address, data);
+}
+
 uint8_t simulated_sensor_read_register(uint8_t register_address)
 {
     if (register_address >= sizeof(simulated_sensor_registers))
@@ -471,6 +487,41 @@ int main(void)
     command_result = simulated_spi_process_read(invalid_command);
 
     printf("Invalid command result: 0x%02X\n", command_result);
+
+    printf("\n");
+
+    printf("\n--- SPI Write Command Test ---\n");
+
+    // Create a write command for register 0x01.
+    uint8_t write_command = 0x01;
+
+    // Write 0x0A into register 0x01.
+    simulated_spi_process_write(write_command, 0x0A);
+
+    // Read the register to verify the update.
+    configuration = simulated_spi_read_register(0x01);
+
+    printf("Configuration after write: 0x%02X\n", configuration);
+
+    // Test an invalid write command.
+    uint8_t invalid_write_command = 0x80;
+
+    simulated_spi_process_write(invalid_write_command, 0x55);
+
+    // Verify the configuration register hasn't changed.
+    configuration = simulated_spi_read_register(0x01);
+
+    printf("Configuration after invalid command: 0x%02X\n",
+           configuration);
+
+    // Test writing to the read-only Device ID register.
+    simulated_spi_process_write(0x00, 0x99);
+
+    // Verify that the Device ID hasn't changed.
+    spi_device_id = simulated_spi_read_register(0x00);
+
+    printf("Device ID after write command: 0x%02X\n",
+                       spi_device_id);
 
     printf("\n");
 
