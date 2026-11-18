@@ -239,6 +239,19 @@ static void simulated_spi_process_write(uint8_t command, uint8_t data)
     simulated_spi_write_register(address, data);
 }
 
+// Perform a complete simulated SPI write transaction.
+static void simulated_spi_write_transaction(uint8_t command, uint8_t data)
+{
+    // Select the SPI device.
+    simulated_spi_select_device();
+
+    // Process the write command and data.
+    simulated_spi_process_write(command, data);
+
+    // Deselect the SPI device.
+    simulated_spi_deselect_device();
+}
+
 uint8_t simulated_sensor_read_register(uint8_t register_address)
 {
     if (register_address >= sizeof(simulated_sensor_registers))
@@ -613,6 +626,28 @@ int main(void)
 
     // Display the transaction result.
     printf("Transaction result: 0x%02X\n", transaction_result);
+
+    // Verify that the device was deselected.
+    printf("Final selection state: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    printf("\n");
+
+    printf("\n--- Complete SPI Write Transaction Test ---\n");
+
+    // Prepare the write command and data.
+    uint8_t transaction_write_command = 0x01;
+    uint8_t transaction_write_data = 0x0A;
+
+    // Perform the complete SPI write transaction.
+    simulated_spi_write_transaction(transaction_write_command,
+                                transaction_write_data);
+
+    // Read back the Configuration register.
+    uint8_t written_value = simulated_spi_read_register(0x01);
+
+    // Display the result.
+    printf("Configuration register: 0x%02X\n", written_value);
 
     // Verify that the device was deselected.
     printf("Final selection state: %s\n",
