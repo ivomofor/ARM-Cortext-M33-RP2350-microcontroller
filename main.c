@@ -166,6 +166,13 @@ static uint8_t simulated_spi_read_register(uint8_t address)
 
 static uint8_t simulated_spi_process_read(uint8_t command)
 {
+    // Check whether the SPI device is selected.
+    if (!simulated_spi_selected)
+    {
+        printf("SPI: Device is not selected\n");
+        return 0xFF;
+    }
+
     // Check whether this is a read command.
     if ((command & 0x80) == 0)
     {
@@ -178,6 +185,22 @@ static uint8_t simulated_spi_process_read(uint8_t command)
 
     // Retrieve the register value.
     return simulated_spi_read_register(address);
+}
+
+// Perform a complete simulated SPI read transaction.
+static uint8_t simulated_spi_read_transaction(uint8_t command)
+{
+    // Select the SPI device.
+    simulated_spi_select_device();
+
+    // Process the read command and retrieve the data.
+    uint8_t received_data = simulated_spi_process_read(command);
+
+    // Deselect the SPI device.
+    simulated_spi_deselect_device();
+
+    // Return the received data.
+    return received_data;
 }
 
 static void simulated_spi_write_register(uint8_t address, uint8_t value)
@@ -494,18 +517,31 @@ int main(void)
     // Create a read command for register 0x00.
     uint8_t read_command = 0x80;
 
-    // Process the read command.
+    // Select the SPI device.
+    simulated_spi_select_device();
+
+    // Process the valid read command.
     uint8_t command_result = simulated_spi_process_read(read_command);
 
     printf("Read command: 0x%02X\n", read_command);
     printf("Read result:  0x%02X\n", command_result);
 
+    // Deselect the SPI device.
+    simulated_spi_deselect_device();
+
     // Test an invalid command.
     uint8_t invalid_command = 0x01;
 
+    // Select the SPI device.
+    simulated_spi_select_device();
+
+    // Process the invalid read command.
     command_result = simulated_spi_process_read(invalid_command);
 
     printf("Invalid command result: 0x%02X\n", command_result);
+
+    // Deselect the SPI device.
+    simulated_spi_deselect_device();
 
     printf("\n");
 
@@ -561,6 +597,24 @@ int main(void)
     simulated_spi_deselect_device();
 
     // Verify the deselected state.
+    printf("Final selection state: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    printf("\n");
+
+    printf("\n--- Complete SPI Read Transaction Test ---\n");
+
+    // Create a read command for the Device ID register.
+    uint8_t transaction_command = 0x80;
+
+    // Perform the complete SPI read transaction.
+    uint8_t transaction_result =
+        simulated_spi_read_transaction(transaction_command);
+
+    // Display the transaction result.
+    printf("Transaction result: 0x%02X\n", transaction_result);
+
+    // Verify that the device was deselected.
     printf("Final selection state: %s\n",
            simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
 
