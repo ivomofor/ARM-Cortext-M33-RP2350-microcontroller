@@ -125,6 +125,9 @@ static const uint8_t simulated_sensor_registers[] =
     0x56   // Register 0x07: Measurement byte 3
 };
 
+// Track whether the simulated SPI device is selected.
+static bool simulated_spi_selected = false;
+
 static uint8_t simulated_spi_registers[] =
 {
     0x42,  // Register 0x00: Device ID
@@ -133,6 +136,22 @@ static uint8_t simulated_spi_registers[] =
     0xF4,  // Register 0x03: Temperature LSB
     0x01   // Register 0x04: Status
 };
+
+// Select the simulated SPI device.
+static void simulated_spi_select_device(void)
+{
+    simulated_spi_selected = true;
+
+    printf("SPI: Device selected (CS LOW)\n");
+}
+
+// Deselect the simulated SPI device.
+static void simulated_spi_deselect_device(void)
+{
+    simulated_spi_selected = false;
+
+    printf("SPI: Device deselected (CS HIGH)\n");
+}
 
 static uint8_t simulated_spi_read_register(uint8_t address)
 {
@@ -521,7 +540,29 @@ int main(void)
     spi_device_id = simulated_spi_read_register(0x00);
 
     printf("Device ID after write command: 0x%02X\n",
-                       spi_device_id);
+           spi_device_id);
+
+    printf("\n");
+
+    printf("\n--- SPI Chip Select Test ---\n");
+
+    // Verify the initial state.
+    printf("Initial selection state: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    // Select the SPI device.
+    simulated_spi_select_device();
+
+    // Verify the selected state.
+    printf("Selection state: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    // Deselect the SPI device.
+    simulated_spi_deselect_device();
+
+    // Verify the deselected state.
+    printf("Final selection state: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
 
     printf("\n");
 
