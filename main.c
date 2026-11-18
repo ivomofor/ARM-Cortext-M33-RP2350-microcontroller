@@ -153,54 +153,66 @@ static void simulated_spi_deselect_device(void)
     printf("SPI: Device deselected (CS HIGH)\n");
 }
 
-static uint8_t simulated_spi_read_register(uint8_t address)
+static bool simulated_spi_read_register(uint8_t address, uint8_t *value)
 {
+    // Check whether the output pointer is valid.
+    if (value == NULL)
+    {
+        printf("SPI: Invalid output pointer\n");
+        return false;
+    }
+
+    // Check whether the register address is valid.
     if (address >= sizeof(simulated_spi_registers))
     {
         printf("SPI: Invalid register address 0x%02X\n", address);
-        return 0xFF;
+        return false;
     }
 
-    return simulated_spi_registers[address];
+    // Retrieve the register value.
+    *value = simulated_spi_registers[address];
+
+    // Report successful read.
+    return true;
 }
 
-static uint8_t simulated_spi_process_read(uint8_t command)
+static bool simulated_spi_process_read(uint8_t command, uint8_t *value)
 {
     // Check whether the SPI device is selected.
     if (!simulated_spi_selected)
     {
         printf("SPI: Device is not selected\n");
-        return 0xFF;
+        return false;
     }
 
     // Check whether this is a read command.
     if ((command & 0x80) == 0)
     {
         printf("SPI: Invalid read command\n");
-        return 0xFF;
+        return false;
     }
 
     // Extract the register address.
     uint8_t address = command & 0x7F;
 
     // Retrieve the register value.
-    return simulated_spi_read_register(address);
+    return simulated_spi_read_register(address, value);
 }
 
 // Perform a complete simulated SPI read transaction.
-static uint8_t simulated_spi_read_transaction(uint8_t command)
+static bool simulated_spi_read_transaction(uint8_t command, uint8_t *value)
 {
     // Select the SPI device.
     simulated_spi_select_device();
 
     // Process the read command and retrieve the data.
-    uint8_t received_data = simulated_spi_process_read(command);
+    bool success = simulated_spi_process_read(command, value);
 
     // Deselect the SPI device.
     simulated_spi_deselect_device();
 
-    // Return the received data.
-    return received_data;
+    // Return the transaction status.
+    return success;
 }
 
 static void simulated_spi_write_register(uint8_t address, uint8_t value)
@@ -496,22 +508,32 @@ int main(void)
     printf("\n--- Simulated SPI Register Test ---\n");
 
     // Read the device ID register.
-    uint8_t spi_device_id = simulated_spi_read_register(0x00);
+    uint8_t spi_device_id;
 
-    printf("SPI Device ID: 0x%02X\n", spi_device_id);
+    if (simulated_spi_read_register(0x00, &spi_device_id))
+    {
+        printf("SPI Device ID: 0x%02X\n", spi_device_id);
+    }
 
     // Update the configuration register.
     simulated_spi_write_register(0x01, 0x05);
 
     // Read the configuration register again.
-    uint8_t configuration = simulated_spi_read_register(0x01);
+    uint8_t configuration;
 
-    printf("Configuration: 0x%02X\n", configuration);
+    if (simulated_spi_read_register(0x01, &configuration))
+    {
+        printf("Configuration: 0x%02X\n", configuration);
+    }
 
     // Test reading an invalid register.
-    uint8_t invalid_value = simulated_spi_read_register(0x05);
+    uint8_t invalid_value;
 
-    printf("Invalid register read returned: 0x%02X\n", invalid_value);
+    bool invalid_read_success =
+        simulated_spi_read_register(0x05, &invalid_value);
+
+    printf("Invalid register read status: %s\n",
+           invalid_read_success ? "SUCCESS" : "FAILED");
 
     // Test writing to an invalid register.
     simulated_spi_write_register(0x05, 0xAA);
@@ -520,9 +542,11 @@ int main(void)
     simulated_spi_write_register(0x00, 0x99);
 
     // Read the Device ID again to verify it hasn't changed.
-    spi_device_id = simulated_spi_read_register(0x00);
+    if (simulated_spi_read_register(0x00, &spi_device_id))
+    {
+        printf("Device ID after write attempt: 0x%02X\n", spi_device_id);
+    }
 
-    printf("Device ID after write attempt: 0x%02X\n", spi_device_id);
     printf("\n");
 
     printf("\n--- SPI Read Command Test ---\n");
@@ -530,14 +554,23 @@ int main(void)
     // Create a read command for register 0x00.
     uint8_t read_command = 0x80;
 
+    // Variable to receive the register data.
+    uint8_t command_result;
+
     // Select the SPI device.
     simulated_spi_select_device();
 
     // Process the valid read command.
-    uint8_t command_result = simulated_spi_process_read(read_command);
+    bool read_success =
+        simulated_spi_process_read(read_command, &command_result);
 
     printf("Read command: 0x%02X\n", read_command);
-    printf("Read result:  0x%02X\n", command_result);
+    printf("Read status:  %s\n", read_success ? "SUCCESS" : "FAILED");
+
+    if (read_success)
+    {
+        printf("Read result:  0x%02X\n", command_result);
+    }
 
     // Deselect the SPI device.
     simulated_spi_deselect_device();
@@ -549,9 +582,11 @@ int main(void)
     simulated_spi_select_device();
 
     // Process the invalid read command.
-    command_result = simulated_spi_process_read(invalid_command);
+    bool invalid_command_success =
+    simulated_spi_process_read(invalid_command, &command_result);
 
-    printf("Invalid command result: 0x%02X\n", command_result);
+    printf("Invalid command status: %s\n",
+       invalid_command_success ? "SUCCESS" : "FAILED");
 
     // Deselect the SPI device.
     simulated_spi_deselect_device();
@@ -567,9 +602,10 @@ int main(void)
     simulated_spi_process_write(write_command, 0x0A);
 
     // Read the register to verify the update.
-    configuration = simulated_spi_read_register(0x01);
-
-    printf("Configuration after write: 0x%02X\n", configuration);
+    if (simulated_spi_read_register(0x01, &configuration))
+    {
+        printf("Configuration after write: 0x%02X\n", configuration);
+    }
 
     // Test an invalid write command.
     uint8_t invalid_write_command = 0x80;
@@ -577,19 +613,21 @@ int main(void)
     simulated_spi_process_write(invalid_write_command, 0x55);
 
     // Verify the configuration register hasn't changed.
-    configuration = simulated_spi_read_register(0x01);
-
-    printf("Configuration after invalid command: 0x%02X\n",
-           configuration);
+    if (simulated_spi_read_register(0x01, &configuration))
+    {
+        printf("Configuration after invalid command: 0x%02X\n",
+               configuration);
+    }
 
     // Test writing to the read-only Device ID register.
     simulated_spi_process_write(0x00, 0x99);
 
     // Verify that the Device ID hasn't changed.
-    spi_device_id = simulated_spi_read_register(0x00);
-
-    printf("Device ID after write command: 0x%02X\n",
-           spi_device_id);
+    if (simulated_spi_read_register(0x00, &spi_device_id))
+    {
+        printf("Device ID after write command: 0x%02X\n",
+               spi_device_id);
+    }
 
     printf("\n");
 
@@ -620,12 +658,23 @@ int main(void)
     // Create a read command for the Device ID register.
     uint8_t transaction_command = 0x80;
 
-    // Perform the complete SPI read transaction.
-    uint8_t transaction_result =
-        simulated_spi_read_transaction(transaction_command);
+    // Variable to receive the register data.
+    uint8_t transaction_result;
 
-    // Display the transaction result.
-    printf("Transaction result: 0x%02X\n", transaction_result);
+    // Perform the complete SPI read transaction.
+    bool transaction_success =
+        simulated_spi_read_transaction(transaction_command,
+                                       &transaction_result);
+
+    // Display the transaction status.
+    printf("Transaction status: %s\n",
+           transaction_success ? "SUCCESS" : "FAILED");
+
+    // Display the received data if successful.
+    if (transaction_success)
+    {
+        printf("Transaction result: 0x%02X\n", transaction_result);
+    }
 
     // Verify that the device was deselected.
     printf("Final selection state: %s\n",
@@ -644,14 +693,37 @@ int main(void)
                                 transaction_write_data);
 
     // Read back the Configuration register.
-    uint8_t written_value = simulated_spi_read_register(0x01);
+    uint8_t written_value;
 
-    // Display the result.
-    printf("Configuration register: 0x%02X\n", written_value);
+    bool read_back_success =
+        simulated_spi_read_register(0x01, &written_value);
+
+    // Display the result if the read succeeds.
+    if (read_back_success)
+    {
+        printf("Configuration register: 0x%02X\n", written_value);
+    }
 
     // Verify that the device was deselected.
     printf("Final selection state: %s\n",
            simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    printf("\n");
+
+    printf("\n--- SPI Invalid Register Address Test ---\n");
+
+    // Attempt to read an invalid register.
+    uint8_t invalid_read_result;
+
+    bool invalid_address_success =
+    simulated_spi_read_register(0x20, &invalid_read_result);
+
+    // Display the read status.
+    printf("Invalid read status: %s\n",
+       invalid_address_success ? "SUCCESS" : "FAILED");
+
+    // Attempt to write to an invalid register.
+    simulated_spi_write_register(0x20, 0x55);
 
     printf("\n");
 
