@@ -11,6 +11,8 @@
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 
+#define SPI_TIMEOUT_US 100000
+
 volatile bool alarm_fired = false;
 volatile bool repeating_timer_fired = false;
 volatile bool heartbeat_timer_fired = false;
@@ -208,60 +210,200 @@ static bool simulated_spi_read_transaction(uint8_t command, uint8_t *value)
     // Process the read command and retrieve the data.
     bool success = simulated_spi_process_read(command, value);
 
-    // Deselect the SPI device.
+    // Deselect the SPI device regardless of the result.
     simulated_spi_deselect_device();
 
-    // Return the transaction status.
-    return success;
+    // Report communication failure.
+    if (!success)
+    {
+        printf("SPI: Read transaction failed. Device deselected.\n");
+        return false;
+    }
+
+    printf("SPI: Read transaction completed successfully.\n");
+
+    return true;
 }
 
-static void simulated_spi_write_register(uint8_t address, uint8_t value)
+// Read the simulated 16-bit temperature measurement over SPI.
+static bool simulated_spi_read_temperature(uint16_t *temperature)
+{
+    // Validate the output pointer.
+    if (temperature == NULL)
+    {
+        printf("SPI: Invalid temperature output pointer.\n");
+        return false;
+    }
+
+    // Read the temperature MSB.
+    uint8_t msb = 0;
+
+    if (!simulated_spi_read_transaction(0x82, &msb))
+    {
+        printf("SPI: Failed to read temperature MSB.\n");
+        return false;
+    }
+
+    // Read the temperature LSB.
+    uint8_t lsb = 0;
+
+    if (!simulated_spi_read_transaction(0x83, &lsb))
+    {
+        printf("SPI: Failed to read temperature LSB.\n");
+        return false;
+    }
+
+    // Combine both bytes into a 16-bit measurement.
+    *temperature = ((uint16_t)msb << 8) | lsb;
+
+    printf("SPI: Temperature raw value: %u (0x%04X)\n",
+           (unsigned int)*temperature,
+           (unsigned int)*temperature);
+
+    return true;
+}
+
+static bool simulated_spi_write_register(uint8_t address, uint8_t value)
 {
     if (address >= sizeof(simulated_spi_registers))
     {
         printf("SPI: Invalid register address 0x%02X\n", address);
-        return;
+        return false;
     }
 
     if (address == 0x00)
     {
         printf("SPI: Register 0x00 is read-only\n");
-        return;
+        return false;
     }
 
     simulated_spi_registers[address] = value;
 
     printf("SPI: Register 0x%02X updated to 0x%02X\n",
            address, value);
+
+    return true;
 }
 
-static void simulated_spi_process_write(uint8_t command, uint8_t data)
+static bool simulated_spi_process_write(uint8_t command, uint8_t data)
 {
     // Check whether this is a write command.
     if ((command & 0x80) != 0)
     {
         printf("SPI: Invalid write command\n");
-        return;
+        return false;
     }
 
     // Extract the register address.
     uint8_t address = command & 0x7F;
 
     // Write the data into the register.
-    simulated_spi_write_register(address, data);
+    return simulated_spi_write_register(address, data);
 }
 
 // Perform a complete simulated SPI write transaction.
-static void simulated_spi_write_transaction(uint8_t command, uint8_t data)
+static bool simulated_spi_write_transaction(uint8_t command, uint8_t data)
 {
     // Select the SPI device.
     simulated_spi_select_device();
 
     // Process the write command and data.
-    simulated_spi_process_write(command, data);
+    bool success = simulated_spi_process_write(command, data);
 
-    // Deselect the SPI device.
+    // Always deselect the SPI device.
     simulated_spi_deselect_device();
+
+    // Report transaction failure.
+    if (!success)
+    {
+        printf("SPI: Write transaction failed. Device deselected.\n");
+        return false;
+    }
+
+    printf("SPI: Write transaction completed successfully.\n");
+
+    return true;
+}
+
+bool simulated_spi_wait_until_ready(uint64_t ready_delay_us, bool device_responds)
+{
+    uint64_t start_time = time_us_64();
+
+    printf("Waiting for SPI device...\n");
+
+    while (true)
+    {
+        uint64_t elapsed_time = time_us_64() - start_time;
+
+        if (device_responds && elapsed_time >= ready_delay_us)
+        {
+            printf("SPI device ready after %llu us\n",
+                   (unsigned long long)elapsed_time);
+
+            return true;
+        }
+
+        if (elapsed_time >= SPI_TIMEOUT_US)
+        {
+            printf("SPI timeout! Device did not respond.\n");
+
+            return false;
+        }
+
+        sleep_us(1000);
+    }
+}
+
+// Initialize and configure the simulated SPI device.
+static bool simulated_spi_initialize(void)
+{
+    uint8_t device_id = 0;
+
+    // Step 1: Read the device ID.
+    printf("\nSPI: Initializing device...\n");
+
+    if (!simulated_spi_read_transaction(0x80, &device_id))
+    {
+        printf("SPI: Failed to read device ID.\n");
+        return false;
+    }
+
+    // Step 2: Verify the device ID.
+    if (device_id != 0x42)
+    {
+        printf("SPI: Unexpected device ID 0x%02X\n", device_id);
+        return false;
+    }
+
+    printf("SPI: Device ID verified: 0x%02X\n", device_id);
+
+    // Step 3: Write the required configuration.
+    if (!simulated_spi_write_transaction(0x01, 0x05))
+    {
+        printf("SPI: Failed to configure device.\n");
+        return false;
+    }
+
+    // Step 4: Read the configuration back.
+    uint8_t configuration = 0;
+
+    if (!simulated_spi_read_transaction(0x81, &configuration))
+    {
+        printf("SPI: Failed to read configuration.\n");
+        return false;
+    }
+
+    // Step 5: Verify the configuration.
+    if (configuration != 0x05)
+    {
+        printf("SPI: Configuration verification failed!\n");
+        return false;
+    }
+
+    printf("SPI: Configuration verified: 0x%02X\n", configuration);
+    printf("SPI: Device initialization successful!\n");
+
+    return true;
 }
 
 uint8_t simulated_sensor_read_register(uint8_t register_address)
@@ -724,6 +866,173 @@ int main(void)
 
     // Attempt to write to an invalid register.
     simulated_spi_write_register(0x20, 0x55);
+
+    printf("\n--- SPI Transaction Failure Recovery Test ---\n");
+
+    uint8_t recovery_test_value;
+
+    bool recovery_test_success =
+        simulated_spi_read_transaction(0xA0, &recovery_test_value);
+
+    printf("Recovery test transaction: %s\n",
+           recovery_test_success ? "SUCCESS" : "FAILED");
+
+    printf("Device selection after failure: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    printf("\n--- SPI Communication After Recovery Test ---\n");
+
+    bool recovery_retry_success =
+        simulated_spi_read_transaction(0x80, &recovery_test_value);
+
+    printf("Retry transaction: %s\n",
+           recovery_retry_success ? "SUCCESS" : "FAILED");
+
+    if (recovery_retry_success)
+    {
+        printf("Recovered read value: 0x%02X\n", recovery_test_value);
+    }
+
+    printf("Device selection after retry: %s\n",
+           simulated_spi_selected ? "SELECTED" : "NOT SELECTED");
+
+    printf("\n--- SPI Timeout Tests ---\n");
+
+    /* Test 1: Device responds before timeout */
+    bool spi_ready_success = simulated_spi_wait_until_ready(20000, true);
+
+    if (spi_ready_success)
+    {
+        printf("SPI readiness test PASSED\n");
+    }
+    else
+    {
+        printf("SPI readiness test FAILED\n");
+    }
+
+    /* Test 2: Device does not respond */
+    bool spi_ready_timeout = simulated_spi_wait_until_ready(0, false);
+
+    if (!spi_ready_timeout)
+    {
+        printf("SPI timeout test PASSED\n");
+    }
+    else
+    {
+        printf("SPI timeout test FAILED\n");
+    }
+
+    printf("\n");
+
+    printf("\n--- SPI Device Initialization Test ---\n");
+
+    bool initialization_success = simulated_spi_initialize();
+
+    if (initialization_success)
+    {
+        printf("SPI initialization test PASSED\n");
+    }
+    else
+    {
+        printf("SPI initialization test FAILED\n");
+    }
+
+    printf("\n");
+
+    printf("\n--- SPI Device Initialization Failure Test ---\n");
+
+    // Save the original Device ID.
+    uint8_t original_device_id = simulated_spi_registers[0x00];
+
+    // Simulate an unexpected Device ID.
+    simulated_spi_registers[0x00] = 0x99;
+
+    // Initialization should fail.
+    bool initialization_failure_test =
+        !simulated_spi_initialize();
+
+    // Restore the original Device ID.
+    simulated_spi_registers[0x00] = original_device_id;
+
+    if (initialization_failure_test)
+    {
+        printf("SPI initialization failure test PASSED\n");
+    }
+    else
+    {
+        printf("SPI initialization failure test FAILED\n");
+    }
+
+    printf("Device ID restored: 0x%02X\n",
+           simulated_spi_registers[0x00]);
+
+    printf("\n");
+
+    printf("\n--- SPI Multi-Byte Temperature Reading Test ---\n");
+
+    uint16_t temperature = 0;
+
+    bool temperature_read_success =
+        simulated_spi_read_temperature(&temperature);
+
+    if (temperature_read_success)
+    {
+        printf("Temperature reading test PASSED\n");
+        printf("Temperature: %u (0x%04X)\n",
+               (unsigned int)temperature,
+               (unsigned int)temperature);
+    }
+    else
+    {
+        printf("Temperature reading test FAILED\n");
+    }
+
+    printf("\n");
+
+    printf("\n--- SPI Temperature NULL Pointer Test ---\n");
+
+    bool null_pointer_test =
+        !simulated_spi_read_temperature(NULL);
+
+    if (null_pointer_test)
+    {
+        printf("SPI NULL pointer test PASSED\n");
+    }
+    else
+    {
+        printf("SPI NULL pointer test FAILED\n");
+    }
+
+    printf("\n");
+
+    printf("\n--- Complete SPI Sensor Driver Test ---\n");
+
+    uint16_t final_temperature = 0;
+
+    bool sensor_test_success = false;
+
+    // Step 1: Initialize the SPI device.
+    if (simulated_spi_initialize())
+    {
+        // Step 2: Read the temperature measurement.
+        if (simulated_spi_read_temperature(&final_temperature))
+        {
+            sensor_test_success = true;
+        }
+    }
+
+    // Step 3: Report the complete test result.
+    if (sensor_test_success)
+    {
+        printf("Complete SPI sensor test PASSED\n");
+
+        printf("Final temperature reading: %u\n",
+               (unsigned int)final_temperature);
+    }
+    else
+    {
+        printf("Complete SPI sensor test FAILED\n");
+    }
 
     printf("\n");
 
