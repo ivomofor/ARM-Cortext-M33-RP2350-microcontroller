@@ -10,6 +10,12 @@ pico_sdk_init()
 
 add_executable(pico2_firmware
         main.c
+        src/spi_driver.c
+        src/sensor.c
+)
+
+target_include_directories(pico2_firmware PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 target_link_libraries(pico2_firmware
