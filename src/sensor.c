@@ -3,16 +3,25 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
-
-#include "spi_driver.h"
+#include <stdbool.h>
 
 // Initialize and configure the simulated sensor.
-bool sensor_initialize(void)
+bool sensor_initialize(const communication_interface_t *communication)
 {
-    // Step 1: Initialize the SPI communication driver.
-    if (!spi_driver_initialize())
+    // Validate the communication interface.
+    if (communication == NULL ||
+        communication->initialize == NULL ||
+        communication->read_register == NULL ||
+        communication->write_register == NULL)
     {
-        printf("Sensor: SPI driver initialization failed.\n");
+        printf("Sensor: Invalid communication interface.\n");
+        return false;
+    }
+
+    // Step 1: Initialize the communication interface.
+    if (!communication->initialize())
+    {
+        printf("Sensor: Communication interface initialization failed.\n");
         return false;
     }
 
@@ -21,7 +30,7 @@ bool sensor_initialize(void)
     // Step 2: Read the device ID.
     printf("\nSensor: Initializing device...\n");
 
-    if (!spi_driver_read_register(0x00, &device_id))
+    if (!communication->read_register(0x00, &device_id))
     {
         printf("Sensor: Failed to read device ID.\n");
         return false;
@@ -37,7 +46,7 @@ bool sensor_initialize(void)
     printf("Sensor: Device ID verified: 0x%02X\n", device_id);
 
     // Step 4: Write the required configuration.
-    if (!spi_driver_write_register(0x01, 0x05))
+    if (!communication->write_register(0x01, 0x05))
     {
         printf("Sensor: Failed to configure device.\n");
         return false;
@@ -46,7 +55,7 @@ bool sensor_initialize(void)
     // Step 5: Read the configuration back.
     uint8_t configuration = 0;
 
-    if (!spi_driver_read_register(0x01, &configuration))
+    if (!communication->read_register(0x01, &configuration))
     {
         printf("Sensor: Failed to read configuration.\n");
         return false;
@@ -66,8 +75,17 @@ bool sensor_initialize(void)
 }
 
 // Read the sensor temperature.
-bool sensor_read_temperature(uint16_t *temperature)
+bool sensor_read_temperature(const communication_interface_t *communication,
+                             uint16_t *temperature)
 {
+    // Validate the communication interface.
+    if (communication == NULL ||
+        communication->read_register == NULL)
+    {
+        printf("Sensor: Invalid communication interface.\n");
+        return false;
+    }
+
     // Validate the output pointer.
     if (temperature == NULL)
     {
@@ -78,7 +96,7 @@ bool sensor_read_temperature(uint16_t *temperature)
     // Read the temperature MSB.
     uint8_t msb = 0;
 
-    if (!spi_driver_read_register(0x02, &msb))
+    if (!communication->read_register(0x02, &msb))
     {
         printf("Sensor: Failed to read temperature MSB.\n");
         return false;
@@ -87,7 +105,7 @@ bool sensor_read_temperature(uint16_t *temperature)
     // Read the temperature LSB.
     uint8_t lsb = 0;
 
-    if (!spi_driver_read_register(0x03, &lsb))
+    if (!communication->read_register(0x03, &lsb))
     {
         printf("Sensor: Failed to read temperature LSB.\n");
         return false;

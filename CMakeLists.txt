@@ -12,6 +12,7 @@ add_executable(pico2_firmware
         main.c
         src/spi_driver.c
         src/sensor.c
+        src/communication_interface_spi.c
 )
 
 target_include_directories(pico2_firmware PRIVATE

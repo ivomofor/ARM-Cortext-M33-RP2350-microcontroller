@@ -10,6 +10,7 @@
 #include "spi_driver.h"
 #include "sensor.h"
 #include "spi_driver_test.h"
+#include "communication_interface_spi.h"
 
 #include "hardware/uart.h"
 #include "hardware/i2c.h"
@@ -779,9 +780,24 @@ int main(void)
 
     printf("\n");
 
+    printf("\n--- NULL Communication Interface Test ---\n");
+
+    bool null_interface_test = !sensor_initialize(NULL);
+
+    if (null_interface_test)
+    {
+        printf("NULL communication interface test PASSED\n");
+    }
+    else
+    {
+        printf("NULL communication interface test FAILED\n");
+    }
+
+    printf("\n");
+
     printf("\n--- SPI Device Initialization Test ---\n");
 
-    bool initialization_success = sensor_initialize();
+    bool initialization_success = sensor_initialize(&spi_communication_interface);
 
     if (initialization_success)
     {
@@ -801,7 +817,7 @@ int main(void)
 
     // Initialization should fail.
     bool initialization_failure_test =
-        !sensor_initialize();
+        !sensor_initialize(&spi_communication_interface);
 
     // Restore the expected Device ID.
     spi_driver_test_set_device_id(0x42);
@@ -832,7 +848,7 @@ int main(void)
     uint16_t temperature = 0;
 
     bool temperature_read_success =
-        sensor_read_temperature(&temperature);
+        sensor_read_temperature(&spi_communication_interface, &temperature);
 
     if (temperature_read_success)
     {
@@ -851,7 +867,7 @@ int main(void)
     printf("\n--- SPI Temperature NULL Pointer Test ---\n");
 
     bool null_pointer_test =
-        !sensor_read_temperature(NULL);
+        !sensor_read_temperature(&spi_communication_interface, NULL);
 
     if (null_pointer_test)
     {
@@ -871,10 +887,10 @@ int main(void)
     bool sensor_test_success = false;
 
     // Step 1: Initialize the sensor.
-    if (sensor_initialize())
+    if (sensor_initialize(&spi_communication_interface))
     {
         // Step 2: Read the temperature measurement.
-        if (sensor_read_temperature(&final_temperature))
+        if (sensor_read_temperature(&spi_communication_interface, &final_temperature))
         {
             sensor_test_success = true;
         }
