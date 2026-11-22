@@ -6,11 +6,17 @@
 
 typedef struct
 {
-    bool (*initialize)(void);
+    void *context;
 
-    bool (*read_register)(uint8_t address, uint8_t *value);
+    bool (*initialize)(void *context);
 
-    bool (*write_register)(uint8_t address, uint8_t value);
+    bool (*read_register)(void *context,
+                          uint8_t address,
+                          uint8_t *value);
+
+    bool (*write_register)(void *context,
+                           uint8_t address,
+                           uint8_t value);
 
 } communication_interface_t;
 

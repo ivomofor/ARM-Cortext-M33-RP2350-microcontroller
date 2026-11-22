@@ -19,7 +19,7 @@ bool sensor_initialize(const communication_interface_t *communication)
     }
 
     // Step 1: Initialize the communication interface.
-    if (!communication->initialize())
+    if (!communication->initialize(communication->context))
     {
         printf("Sensor: Communication interface initialization failed.\n");
         return false;
@@ -30,7 +30,9 @@ bool sensor_initialize(const communication_interface_t *communication)
     // Step 2: Read the device ID.
     printf("\nSensor: Initializing device...\n");
 
-    if (!communication->read_register(0x00, &device_id))
+    if (!communication->read_register(communication->context,
+                                      0x00,
+                                      &device_id))
     {
         printf("Sensor: Failed to read device ID.\n");
         return false;
@@ -46,7 +48,9 @@ bool sensor_initialize(const communication_interface_t *communication)
     printf("Sensor: Device ID verified: 0x%02X\n", device_id);
 
     // Step 4: Write the required configuration.
-    if (!communication->write_register(0x01, 0x05))
+    if (!communication->write_register(communication->context,
+                                       0x01,
+                                       0x05))
     {
         printf("Sensor: Failed to configure device.\n");
         return false;
@@ -55,7 +59,9 @@ bool sensor_initialize(const communication_interface_t *communication)
     // Step 5: Read the configuration back.
     uint8_t configuration = 0;
 
-    if (!communication->read_register(0x01, &configuration))
+    if (!communication->read_register(communication->context,
+                                       0x01,
+                                       &configuration))
     {
         printf("Sensor: Failed to read configuration.\n");
         return false;
@@ -96,7 +102,9 @@ bool sensor_read_temperature(const communication_interface_t *communication,
     // Read the temperature MSB.
     uint8_t msb = 0;
 
-    if (!communication->read_register(0x02, &msb))
+    if (!communication->read_register(communication->context,
+                                      0x02,
+                                      &msb))
     {
         printf("Sensor: Failed to read temperature MSB.\n");
         return false;
@@ -105,7 +113,9 @@ bool sensor_read_temperature(const communication_interface_t *communication,
     // Read the temperature LSB.
     uint8_t lsb = 0;
 
-    if (!communication->read_register(0x03, &lsb))
+    if (!communication->read_register(communication->context,
+                                      0x03,
+                                      &lsb))
     {
         printf("Sensor: Failed to read temperature LSB.\n");
         return false;
