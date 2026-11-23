@@ -15,12 +15,19 @@ typedef struct
 
 } sensor_config_t;
 
+// Sensor instance.
+typedef struct
+{
+    communication_interface_t communication;
+    sensor_config_t configuration;
+
+} sensor_t;
+
 // Initialize and configure the sensor.
-bool sensor_initialize(const communication_interface_t *communication,
-                       const sensor_config_t *configuration);
+bool sensor_initialize(sensor_t *sensor);
 
 // Read the sensor temperature.
-bool sensor_read_temperature(const communication_interface_t *communication,
+bool sensor_read_temperature(sensor_t *sensor,
                              uint16_t *temperature);
 
 #endif

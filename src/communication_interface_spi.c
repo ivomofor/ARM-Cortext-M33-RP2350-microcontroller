@@ -1,14 +1,25 @@
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-#include "communication_interface.h"
-#include "spi_driver.h"
+#include "communication_interface_spi.h"
 
 // Initialize the SPI communication interface.
 static bool spi_interface_initialize(void *context)
 {
-    (void)context;
+    // Convert the generic context into an SPI device pointer.
+    spi_device_t *device = (spi_device_t *)context;
 
-    return spi_driver_initialize();
+    // Validate the device pointer.
+    if (device == NULL)
+    {
+        return false;
+    }
+
+    // Ensure the device is not selected.
+    device->selected = false;
+
+    return true;
 }
 
 // Read a register through the SPI communication interface.
@@ -16,9 +27,10 @@ static bool spi_interface_read_register(void *context,
                                         uint8_t address,
                                         uint8_t *value)
 {
-    (void)context;
+    // Convert the generic context into an SPI device pointer.
+    spi_device_t *device = (spi_device_t *)context;
 
-    return spi_driver_read_register(address, value);
+    return spi_device_read_register(device, address, value);
 }
 
 // Write a register through the SPI communication interface.
@@ -26,16 +38,26 @@ static bool spi_interface_write_register(void *context,
                                          uint8_t address,
                                          uint8_t value)
 {
-    (void)context;
+    // Convert the generic context into an SPI device pointer.
+    spi_device_t *device = (spi_device_t *)context;
 
-    return spi_driver_write_register(address, value);
+    return spi_device_write_register(device, address, value);
 }
 
-// SPI communication interface implementation.
-const communication_interface_t spi_communication_interface =
+// Configure an SPI communication interface for a specific device.
+void spi_communication_interface_configure(
+    communication_interface_t *interface,
+    spi_device_t *device)
 {
-    .context = NULL,
-    .initialize = spi_interface_initialize,
-    .read_register = spi_interface_read_register,
-    .write_register = spi_interface_write_register
-};
+    // Validate the pointers.
+    if (interface == NULL || device == NULL)
+    {
+        return;
+    }
+
+    // Configure the interface.
+    interface->context = device;
+    interface->initialize = spi_interface_initialize;
+    interface->read_register = spi_interface_read_register;
+    interface->write_register = spi_interface_write_register;
+}

@@ -2,7 +2,11 @@
 #define COMMUNICATION_INTERFACE_SPI_H
 
 #include "communication_interface.h"
+#include "spi_driver.h"
 
-extern const communication_interface_t spi_communication_interface;
+// Configure an SPI communication interface for a specific device.
+void spi_communication_interface_configure(
+    communication_interface_t *interface,
+    spi_device_t *device);
 
 #endif

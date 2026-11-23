@@ -780,77 +780,155 @@ int main(void)
 
     printf("\n");
 
-    // Define the sensor configuration.
-    sensor_config_t sensor_configuration =
+        // Initialize two independent simulated SPI devices.
+    printf("\n--- Multiple SPI Sensor Instances ---\n");
+
+    spi_device_t spi_device_1;
+    spi_device_t spi_device_2;
+
+    bool device_1_initialized =
+        spi_device_initialize(&spi_device_1);
+
+    bool device_2_initialized =
+        spi_device_initialize(&spi_device_2);
+
+    if (!device_1_initialized || !device_2_initialized)
+    {
+        printf("SPI device initialization FAILED\n");
+        return 1;
+    }
+
+    // Give the second device a different identity and temperature.
+    spi_device_2.registers[0x00] = 0x43;
+    spi_device_2.registers[0x02] = 0x02;
+    spi_device_2.registers[0x03] = 0x58;
+
+    // Configure independent communication interfaces.
+    communication_interface_t spi_interface_1;
+    communication_interface_t spi_interface_2;
+
+    spi_communication_interface_configure(
+        &spi_interface_1,
+        &spi_device_1);
+
+    spi_communication_interface_configure(
+        &spi_interface_2,
+        &spi_device_2);
+
+    // Define the first sensor configuration.
+    sensor_config_t sensor_configuration_1 =
     {
         .expected_device_id = 0x42,
         .configuration_register = 0x01,
         .configuration_value = 0x05
     };
 
-    printf("\n--- NULL Communication Interface Test ---\n");
-
-    bool null_interface_test =
-        !sensor_initialize(NULL, &sensor_configuration);
-
-    if (null_interface_test)
+    // Define the second sensor configuration.
+    sensor_config_t sensor_configuration_2 =
     {
-        printf("NULL communication interface test PASSED\n");
+        .expected_device_id = 0x43,
+        .configuration_register = 0x01,
+        .configuration_value = 0x0A
+    };
+
+    // Create the first sensor instance.
+    sensor_t spi_sensor_1 =
+    {
+        .communication = spi_interface_1,
+        .configuration = sensor_configuration_1
+    };
+
+    // Create the second sensor instance.
+    sensor_t spi_sensor_2 =
+    {
+        .communication = spi_interface_2,
+        .configuration = sensor_configuration_2
+    };
+
+    printf("Two independent SPI devices created.\n");
+
+    printf("\n--- NULL Sensor Instance Test ---\n");
+
+    bool null_sensor_test = !sensor_initialize(NULL);
+
+    if (null_sensor_test)
+    {
+        printf("NULL sensor instance test PASSED\n");
     }
     else
     {
-        printf("NULL communication interface test FAILED\n");
+        printf("NULL sensor instance test FAILED\n");
     }
 
-    printf("\n");
+    printf("\n--- Invalid Communication Interface Test ---\n");
 
-    printf("\n--- NULL Sensor Configuration Test ---\n");
+    // Create a copy of the first sensor with an invalid interface.
+    sensor_t invalid_sensor = spi_sensor_1;
 
-    bool null_configuration_test =
-        !sensor_initialize(&spi_communication_interface, NULL);
+    // Remove the read-register callback.
+    invalid_sensor.communication.read_register = NULL;
 
-    if (null_configuration_test)
+    // Initialization should reject the invalid interface.
+    bool invalid_interface_test =
+        !sensor_initialize(&invalid_sensor);
+
+    if (invalid_interface_test)
     {
-        printf("NULL sensor configuration test PASSED\n");
+        printf("Invalid communication interface test PASSED\n");
     }
     else
     {
-        printf("NULL sensor configuration test FAILED\n");
+        printf("Invalid communication interface test FAILED\n");
     }
 
-    printf("\n--- SPI Device Initialization Test ---\n");
+    printf("\n--- First SPI Sensor Initialization Test ---\n");
 
-    bool initialization_success =
-        sensor_initialize(&spi_communication_interface, &sensor_configuration);
+    bool initialization_1_success =
+        sensor_initialize(&spi_sensor_1);
 
-    if (initialization_success)
+    if (initialization_1_success)
     {
-        printf("SPI initialization test PASSED\n");
+        printf("First SPI sensor initialization PASSED\n");
     }
     else
     {
-        printf("SPI initialization test FAILED\n");
+        printf("First SPI sensor initialization FAILED\n");
     }
 
-    printf("\n");
+    printf("\n--- Second SPI Sensor Initialization Test ---\n");
+
+    bool initialization_2_success =
+        sensor_initialize(&spi_sensor_2);
+
+    if (initialization_2_success)
+    {
+        printf("Second SPI sensor initialization PASSED\n");
+    }
+    else
+    {
+        printf("Second SPI sensor initialization FAILED\n");
+    }
 
     printf("\n--- SPI Device Initialization Failure Test ---\n");
 
-    // Simulate an unexpected Device ID.
-    spi_driver_test_set_device_id(0x99);
+    // Temporarily change the first device ID.
+    spi_device_1.registers[0x00] = 0x99;
 
-    // Initialization should fail.
+    // Initialization should reject the unexpected device ID.
     bool initialization_failure_test =
-        !sensor_initialize(&spi_communication_interface, &sensor_configuration);
+        !sensor_initialize(&spi_sensor_1);
 
-    // Restore the expected Device ID.
-    spi_driver_test_set_device_id(0x42);
+    // Restore the first device ID.
+    spi_device_1.registers[0x00] = 0x42;
 
-    // Read back the restored Device ID.
+    // Read back the restored device ID.
     uint8_t restored_device_id = 0;
 
     bool device_id_restored =
-        spi_driver_read_register(0x00, &restored_device_id);
+        spi_sensor_1.communication.read_register(
+            spi_sensor_1.communication.context,
+            0x00,
+            &restored_device_id);
 
     if (initialization_failure_test &&
         device_id_restored &&
@@ -863,35 +941,104 @@ int main(void)
         printf("SPI initialization failure test FAILED\n");
     }
 
-    printf("Device ID restored: 0x%02X\n", restored_device_id);
+    printf("First device ID restored: 0x%02X\n",
+           restored_device_id);
 
-    printf("\n");
+    printf("\n--- Independent Device ID Test ---\n");
 
-    printf("\n--- SPI Multi-Byte Temperature Reading Test ---\n");
+    uint8_t device_id_1 = 0;
+    uint8_t device_id_2 = 0;
 
-    uint16_t temperature = 0;
+    bool device_id_1_success =
+        spi_sensor_1.communication.read_register(
+            spi_sensor_1.communication.context,
+            0x00,
+            &device_id_1);
 
-    bool temperature_read_success =
-        sensor_read_temperature(&spi_communication_interface, &temperature);
+    bool device_id_2_success =
+        spi_sensor_2.communication.read_register(
+            spi_sensor_2.communication.context,
+            0x00,
+            &device_id_2);
 
-    if (temperature_read_success)
+    if (device_id_1_success &&
+        device_id_2_success &&
+        device_id_1 == 0x42 &&
+        device_id_2 == 0x43)
     {
-        printf("Temperature reading test PASSED\n");
-        printf("Temperature: %u (0x%04X)\n",
-               (unsigned int)temperature,
-               (unsigned int)temperature);
+        printf("Independent device ID test PASSED\n");
+        printf("Sensor 1 device ID: 0x%02X\n", device_id_1);
+        printf("Sensor 2 device ID: 0x%02X\n", device_id_2);
     }
     else
     {
-        printf("Temperature reading test FAILED\n");
+        printf("Independent device ID test FAILED\n");
     }
 
-    printf("\n");
+    printf("\n--- Independent Sensor Configuration Test ---\n");
+
+    uint8_t configuration_1 = 0;
+    uint8_t configuration_2 = 0;
+
+    bool configuration_1_success =
+        spi_sensor_1.communication.read_register(
+            spi_sensor_1.communication.context,
+            0x01,
+            &configuration_1);
+
+    bool configuration_2_success =
+        spi_sensor_2.communication.read_register(
+            spi_sensor_2.communication.context,
+            0x01,
+            &configuration_2);
+
+    if (configuration_1_success &&
+        configuration_2_success &&
+        configuration_1 == 0x05 &&
+        configuration_2 == 0x0A)
+    {
+        printf("Independent sensor configuration test PASSED\n");
+        printf("Sensor 1 configuration: 0x%02X\n", configuration_1);
+        printf("Sensor 2 configuration: 0x%02X\n", configuration_2);
+    }
+    else
+    {
+        printf("Independent sensor configuration test FAILED\n");
+    }
+
+    printf("\n--- SPI Multi-Byte Temperature Reading Test ---\n");
+
+    uint16_t temperature_1 = 0;
+    uint16_t temperature_2 = 0;
+
+    bool temperature_1_success =
+        sensor_read_temperature(&spi_sensor_1, &temperature_1);
+
+    bool temperature_2_success =
+        sensor_read_temperature(&spi_sensor_2, &temperature_2);
+
+    if (temperature_1_success &&
+        temperature_2_success &&
+        temperature_1 == 500 &&
+        temperature_2 == 600)
+    {
+        printf("Multiple sensor temperature test PASSED\n");
+        printf("Sensor 1 temperature: %u (0x%04X)\n",
+               (unsigned int)temperature_1,
+               (unsigned int)temperature_1);
+        printf("Sensor 2 temperature: %u (0x%04X)\n",
+               (unsigned int)temperature_2,
+               (unsigned int)temperature_2);
+    }
+    else
+    {
+        printf("Multiple sensor temperature test FAILED\n");
+    }
 
     printf("\n--- SPI Temperature NULL Pointer Test ---\n");
 
     bool null_pointer_test =
-        !sensor_read_temperature(&spi_communication_interface, NULL);
+        !sensor_read_temperature(&spi_sensor_1, NULL);
 
     if (null_pointer_test)
     {
@@ -902,35 +1049,40 @@ int main(void)
         printf("SPI NULL pointer test FAILED\n");
     }
 
-    printf("\n");
+    printf("\n--- Complete Multiple SPI Sensor Test ---\n");
 
-    printf("\n--- Complete SPI Sensor Driver Test ---\n");
-
-    uint16_t final_temperature = 0;
+    uint16_t final_temperature_1 = 0;
+    uint16_t final_temperature_2 = 0;
 
     bool sensor_test_success = false;
 
-    // Step 1: Initialize the sensor.
-    if (sensor_initialize(&spi_communication_interface, &sensor_configuration))
+    // Initialize both sensor instances.
+    if (sensor_initialize(&spi_sensor_1) &&
+        sensor_initialize(&spi_sensor_2))
     {
-        // Step 2: Read the temperature measurement.
-        if (sensor_read_temperature(&spi_communication_interface, &final_temperature))
+        // Read both sensor temperatures.
+        if (sensor_read_temperature(
+                &spi_sensor_1, &final_temperature_1) &&
+            sensor_read_temperature(
+                &spi_sensor_2, &final_temperature_2))
         {
             sensor_test_success = true;
         }
     }
 
-    // Step 3: Report the complete test result.
     if (sensor_test_success)
     {
-        printf("Complete SPI sensor test PASSED\n");
+        printf("Complete multiple SPI sensor test PASSED\n");
 
-        printf("Final temperature reading: %u\n",
-               (unsigned int)final_temperature);
+        printf("Sensor 1 final temperature: %u\n",
+               (unsigned int)final_temperature_1);
+
+        printf("Sensor 2 final temperature: %u\n",
+               (unsigned int)final_temperature_2);
     }
     else
     {
-        printf("Complete SPI sensor test FAILED\n");
+        printf("Complete multiple SPI sensor test FAILED\n");
     }
 
     printf("\n");
