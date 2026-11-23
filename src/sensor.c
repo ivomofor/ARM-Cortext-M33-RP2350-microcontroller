@@ -6,15 +6,17 @@
 #include <stdbool.h>
 
 // Initialize and configure the simulated sensor.
-bool sensor_initialize(const communication_interface_t *communication)
+bool sensor_initialize(const communication_interface_t *communication,
+                       const sensor_config_t *configuration)
 {
     // Validate the communication interface.
     if (communication == NULL ||
+        configuration == NULL ||
         communication->initialize == NULL ||
         communication->read_register == NULL ||
         communication->write_register == NULL)
     {
-        printf("Sensor: Invalid communication interface.\n");
+        printf("Sensor: Invalid communication interface or configuration.\n");
         return false;
     }
 
@@ -39,7 +41,7 @@ bool sensor_initialize(const communication_interface_t *communication)
     }
 
     // Step 3: Verify the device ID.
-    if (device_id != 0x42)
+    if (device_id != configuration->expected_device_id)
     {
         printf("Sensor: Unexpected device ID 0x%02X\n", device_id);
         return false;
@@ -49,32 +51,32 @@ bool sensor_initialize(const communication_interface_t *communication)
 
     // Step 4: Write the required configuration.
     if (!communication->write_register(communication->context,
-                                       0x01,
-                                       0x05))
+                                       configuration->configuration_register,
+                                       configuration->configuration_value))
     {
         printf("Sensor: Failed to configure device.\n");
         return false;
     }
 
     // Step 5: Read the configuration back.
-    uint8_t configuration = 0;
+    uint8_t readback_value = 0;
 
     if (!communication->read_register(communication->context,
-                                       0x01,
-                                       &configuration))
+                                      configuration->configuration_register,
+                                      &readback_value))
     {
         printf("Sensor: Failed to read configuration.\n");
         return false;
     }
 
     // Step 6: Verify the configuration.
-    if (configuration != 0x05)
+    if (readback_value != configuration->configuration_value)
     {
         printf("Sensor: Configuration verification failed!\n");
         return false;
     }
 
-    printf("Sensor: Configuration verified: 0x%02X\n", configuration);
+    printf("Sensor: Configuration verified: 0x%02X\n", readback_value);
     printf("Sensor: Device initialization successful!\n");
 
     return true;

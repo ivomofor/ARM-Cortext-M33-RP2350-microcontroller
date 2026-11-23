@@ -780,9 +780,18 @@ int main(void)
 
     printf("\n");
 
+    // Define the sensor configuration.
+    sensor_config_t sensor_configuration =
+    {
+        .expected_device_id = 0x42,
+        .configuration_register = 0x01,
+        .configuration_value = 0x05
+    };
+
     printf("\n--- NULL Communication Interface Test ---\n");
 
-    bool null_interface_test = !sensor_initialize(NULL);
+    bool null_interface_test =
+        !sensor_initialize(NULL, &sensor_configuration);
 
     if (null_interface_test)
     {
@@ -795,9 +804,24 @@ int main(void)
 
     printf("\n");
 
+    printf("\n--- NULL Sensor Configuration Test ---\n");
+
+    bool null_configuration_test =
+        !sensor_initialize(&spi_communication_interface, NULL);
+
+    if (null_configuration_test)
+    {
+        printf("NULL sensor configuration test PASSED\n");
+    }
+    else
+    {
+        printf("NULL sensor configuration test FAILED\n");
+    }
+
     printf("\n--- SPI Device Initialization Test ---\n");
 
-    bool initialization_success = sensor_initialize(&spi_communication_interface);
+    bool initialization_success =
+        sensor_initialize(&spi_communication_interface, &sensor_configuration);
 
     if (initialization_success)
     {
@@ -817,7 +841,7 @@ int main(void)
 
     // Initialization should fail.
     bool initialization_failure_test =
-        !sensor_initialize(&spi_communication_interface);
+        !sensor_initialize(&spi_communication_interface, &sensor_configuration);
 
     // Restore the expected Device ID.
     spi_driver_test_set_device_id(0x42);
@@ -887,7 +911,7 @@ int main(void)
     bool sensor_test_success = false;
 
     // Step 1: Initialize the sensor.
-    if (sensor_initialize(&spi_communication_interface))
+    if (sensor_initialize(&spi_communication_interface, &sensor_configuration))
     {
         // Step 2: Read the temperature measurement.
         if (sensor_read_temperature(&spi_communication_interface, &final_temperature))
