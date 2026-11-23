@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 // Initialize and configure the simulated sensor.
-bool sensor_initialize(sensor_t *sensor)
+sensor_error_t sensor_initialize(sensor_t *sensor)
 {
     // Validate the communication interface.
     if (sensor == NULL ||
@@ -15,14 +15,14 @@ bool sensor_initialize(sensor_t *sensor)
         sensor->communication.write_register == NULL)
     {
         printf("Sensor: Invalid sensor instance or communication interface.\n");
-        return false;
+        return SENSOR_ERROR_INVALID_ARGUMENT;
     }
 
     // Step 1: Initialize the communication interface.
     if (!sensor->communication.initialize(sensor->communication.context))
     {
         printf("Sensor: Communication interface initialization failed.\n");
-        return false;
+        return SENSOR_ERROR_COMMUNICATION_INITIALIZATION;
     }
 
     uint8_t device_id = 0;
@@ -35,14 +35,14 @@ bool sensor_initialize(sensor_t *sensor)
                                              &device_id))
     {
         printf("Sensor: Failed to read device ID.\n");
-        return false;
+        return SENSOR_ERROR_DEVICE_ID_READ;
     }
 
     // Step 3: Verify the device ID.
     if (device_id != sensor->configuration.expected_device_id)
     {
         printf("Sensor: Unexpected device ID 0x%02X\n", device_id);
-        return false;
+        return SENSOR_ERROR_UNEXPECTED_DEVICE_ID;
     }
 
     printf("Sensor: Device ID verified: 0x%02X\n", device_id);
@@ -53,7 +53,7 @@ bool sensor_initialize(sensor_t *sensor)
                                               sensor->configuration.configuration_value))
     {
         printf("Sensor: Failed to configure device.\n");
-        return false;
+        return SENSOR_ERROR_CONFIGURATION_WRITE;
     }
 
     // Step 5: Read the configuration back.
@@ -64,24 +64,24 @@ bool sensor_initialize(sensor_t *sensor)
                                              &readback_value))
     {
         printf("Sensor: Failed to read configuration.\n");
-        return false;
+        return SENSOR_ERROR_CONFIGURATION_READ;
     }
 
     // Step 6: Verify the configuration.
     if (readback_value != sensor->configuration.configuration_value)
     {
         printf("Sensor: Configuration verification failed!\n");
-        return false;
+        return SENSOR_ERROR_CONFIGURATION_VERIFICATION;
     }
 
     printf("Sensor: Configuration verified: 0x%02X\n", readback_value);
     printf("Sensor: Device initialization successful!\n");
 
-    return true;
+    return SENSOR_ERROR_NONE;
 }
 
 // Read the sensor temperature.
-bool sensor_read_temperature(sensor_t *sensor,
+sensor_error_t sensor_read_temperature(sensor_t *sensor,
                              uint16_t *temperature)
 {
     // Validate the sensor instance and communication interface.
@@ -89,14 +89,14 @@ bool sensor_read_temperature(sensor_t *sensor,
         sensor->communication.read_register == NULL)
     {
         printf("Sensor: Invalid sensor instance or communication interface.\n");
-        return false;
+        return SENSOR_ERROR_INVALID_ARGUMENT;
     }
 
     // Validate the output pointer.
     if (temperature == NULL)
     {
         printf("Sensor: Invalid temperature output pointer.\n");
-        return false;
+        return SENSOR_ERROR_INVALID_ARGUMENT;
     }
 
     // Read the temperature MSB.
@@ -107,7 +107,7 @@ bool sensor_read_temperature(sensor_t *sensor,
                                              &msb))
     {
         printf("Sensor: Failed to read temperature MSB.\n");
-        return false;
+        return SENSOR_ERROR_TEMPERATURE_MSB_READ;
     }
 
     // Read the temperature LSB.
@@ -118,7 +118,7 @@ bool sensor_read_temperature(sensor_t *sensor,
                                              &lsb))
     {
         printf("Sensor: Failed to read temperature LSB.\n");
-        return false;
+        return SENSOR_ERROR_TEMPERATURE_LSB_READ;
     }
 
     // Combine both bytes into a 16-bit measurement.
@@ -128,5 +128,5 @@ bool sensor_read_temperature(sensor_t *sensor,
            (unsigned int)*temperature,
            (unsigned int)*temperature);
 
-    return true;
+    return SENSOR_ERROR_NONE;
 }

@@ -780,7 +780,7 @@ int main(void)
 
     printf("\n");
 
-        // Initialize two independent simulated SPI devices.
+    // Initialize two independent simulated SPI devices.
     printf("\n--- Multiple SPI Sensor Instances ---\n");
 
     spi_device_t spi_device_1;
@@ -849,7 +849,9 @@ int main(void)
 
     printf("\n--- NULL Sensor Instance Test ---\n");
 
-    bool null_sensor_test = !sensor_initialize(NULL);
+    // Initialization should reject a NULL sensor pointer.
+    bool null_sensor_test =
+        sensor_initialize(NULL) != SENSOR_ERROR_NONE;
 
     if (null_sensor_test)
     {
@@ -870,7 +872,7 @@ int main(void)
 
     // Initialization should reject the invalid interface.
     bool invalid_interface_test =
-        !sensor_initialize(&invalid_sensor);
+        sensor_initialize(&invalid_sensor) != SENSOR_ERROR_NONE;
 
     if (invalid_interface_test)
     {
@@ -884,7 +886,7 @@ int main(void)
     printf("\n--- First SPI Sensor Initialization Test ---\n");
 
     bool initialization_1_success =
-        sensor_initialize(&spi_sensor_1);
+        sensor_initialize(&spi_sensor_1) == SENSOR_ERROR_NONE;
 
     if (initialization_1_success)
     {
@@ -898,7 +900,7 @@ int main(void)
     printf("\n--- Second SPI Sensor Initialization Test ---\n");
 
     bool initialization_2_success =
-        sensor_initialize(&spi_sensor_2);
+        sensor_initialize(&spi_sensor_2) == SENSOR_ERROR_NONE;
 
     if (initialization_2_success)
     {
@@ -915,8 +917,12 @@ int main(void)
     spi_device_1.registers[0x00] = 0x99;
 
     // Initialization should reject the unexpected device ID.
+    sensor_error_t initialization_failure_error =
+        sensor_initialize(&spi_sensor_1);
+
     bool initialization_failure_test =
-        !sensor_initialize(&spi_sensor_1);
+        initialization_failure_error ==
+        SENSOR_ERROR_UNEXPECTED_DEVICE_ID;
 
     // Restore the first device ID.
     spi_device_1.registers[0x00] = 0x42;
@@ -1012,10 +1018,12 @@ int main(void)
     uint16_t temperature_2 = 0;
 
     bool temperature_1_success =
-        sensor_read_temperature(&spi_sensor_1, &temperature_1);
+        sensor_read_temperature(&spi_sensor_1, &temperature_1) ==
+        SENSOR_ERROR_NONE;
 
     bool temperature_2_success =
-        sensor_read_temperature(&spi_sensor_2, &temperature_2);
+        sensor_read_temperature(&spi_sensor_2, &temperature_2) ==
+        SENSOR_ERROR_NONE;
 
     if (temperature_1_success &&
         temperature_2_success &&
@@ -1038,7 +1046,8 @@ int main(void)
     printf("\n--- SPI Temperature NULL Pointer Test ---\n");
 
     bool null_pointer_test =
-        !sensor_read_temperature(&spi_sensor_1, NULL);
+        sensor_read_temperature(&spi_sensor_1, NULL) ==
+        SENSOR_ERROR_INVALID_ARGUMENT;
 
     if (null_pointer_test)
     {
@@ -1057,14 +1066,14 @@ int main(void)
     bool sensor_test_success = false;
 
     // Initialize both sensor instances.
-    if (sensor_initialize(&spi_sensor_1) &&
-        sensor_initialize(&spi_sensor_2))
+    if (sensor_initialize(&spi_sensor_1) == SENSOR_ERROR_NONE &&
+        sensor_initialize(&spi_sensor_2) == SENSOR_ERROR_NONE)
     {
         // Read both sensor temperatures.
         if (sensor_read_temperature(
-                &spi_sensor_1, &final_temperature_1) &&
+                &spi_sensor_1, &final_temperature_1) == SENSOR_ERROR_NONE &&
             sensor_read_temperature(
-                &spi_sensor_2, &final_temperature_2))
+                &spi_sensor_2, &final_temperature_2) == SENSOR_ERROR_NONE)
         {
             sensor_test_success = true;
         }

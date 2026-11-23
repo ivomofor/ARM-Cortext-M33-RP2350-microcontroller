@@ -6,6 +6,22 @@
 
 #include "communication_interface.h"
 
+// Sensor driver error codes.
+typedef enum
+{
+    SENSOR_ERROR_NONE = 0,
+    SENSOR_ERROR_INVALID_ARGUMENT,
+    SENSOR_ERROR_COMMUNICATION_INITIALIZATION,
+    SENSOR_ERROR_DEVICE_ID_READ,
+    SENSOR_ERROR_UNEXPECTED_DEVICE_ID,
+    SENSOR_ERROR_CONFIGURATION_WRITE,
+    SENSOR_ERROR_CONFIGURATION_READ,
+    SENSOR_ERROR_CONFIGURATION_VERIFICATION,
+    SENSOR_ERROR_TEMPERATURE_MSB_READ,
+    SENSOR_ERROR_TEMPERATURE_LSB_READ
+
+} sensor_error_t;
+
 // Sensor configuration.
 typedef struct
 {
@@ -24,10 +40,10 @@ typedef struct
 } sensor_t;
 
 // Initialize and configure the sensor.
-bool sensor_initialize(sensor_t *sensor);
+sensor_error_t sensor_initialize(sensor_t *sensor);
 
 // Read the sensor temperature.
-bool sensor_read_temperature(sensor_t *sensor,
+sensor_error_t sensor_read_temperature(sensor_t *sensor,
                              uint16_t *temperature);
 
 #endif
